@@ -38,6 +38,7 @@ const page = await context.newPage();
 // measured from here and the blank pre-paint lead-in is trimmed at encode time.
 const videoT0 = Date.now();
 const LEAD_TRIM = 0.5;
+await page.addInitScript("window.__DEMO_CHROME = true;");
 await page.addInitScript(OVERLAY_INIT);
 await page.goto(`file://${path.join(root, "web", "demo-app", "index.html")}`);
 await page.waitForSelector("#__demo_layer");
