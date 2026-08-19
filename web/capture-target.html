@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>capture target</title>
+<style>
+  html,body{margin:0;background:#0d1117;height:100%;overflow:hidden;
+    font-family:-apple-system,"SF Pro Text",sans-serif;color:#e6edf3}
+  h1{font:600 20px -apple-system;padding:18px 22px;margin:0}
+  .b{position:absolute;top:120px;left:40px;width:70px;height:70px;border-radius:20px;
+     background:linear-gradient(135deg,#58a6ff,#a371f7);animation:m 1.6s ease-in-out infinite alternate}
+  @keyframes m{from{left:40px}to{left:560px}}
+  button{position:absolute;top:250px;left:240px;font:600 15px -apple-system;padding:12px 24px;
+    border-radius:8px;border:0;background:#388bfd;color:#fff}
+  #out{position:absolute;top:310px;left:240px;color:#3fb950;font:600 16px -apple-system}
+</style>
+<h1>desktop capture target</h1>
+<div class="b"></div>
+<button onclick="window.n=(window.n||0)+1;document.getElementById('out').textContent='clicked '+window.n">Click me</button>
+<div id="out"></div>

@@ -1,0 +1,10 @@
+import { chromium } from "playwright";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const b = await chromium.launch({ headless: false, args: ["--window-position=100,100", "--window-size=760,520"] });
+const p = await b.newPage({ viewport: null });
+await p.goto(`file://${path.join(root, "web", "capture-target.html")}`);
+console.log("READY");
+await new Promise((r) => setTimeout(r, 35000));
+await b.close();

@@ -172,7 +172,7 @@ await new Promise((resolve, reject) => {
   const ff = spawn("ffmpeg", [
     "-y", "-loglevel", "error", "-ss", String(LEAD_TRIM), "-i", webm,
     "-vf", `fps=${FPS},scale=${SIZE.width}:${SIZE.height}:flags=lanczos,format=yuv420p`,
-    "-c:v", "libx264", "-preset", "slow", "-crf", "22",
+    "-c:v", "libx264", "-preset", X264_PRESET, "-crf", "22",
     "-movflags", "+faststart", mp4,
   ], { stdio: "inherit" });
   ff.on("close", (c) => (c === 0 ? resolve() : reject(new Error(`ffmpeg ${c}`))));
