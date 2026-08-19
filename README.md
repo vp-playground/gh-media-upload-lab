@@ -38,19 +38,67 @@ natively. Undocumented means unversioned: pin nothing to it that cannot fall bac
 Verified by probing content types directly. The endpoint validates the MIME type **and**
 that the filename extension matches it.
 
+The whitelist is exactly eight types:
+
 | Content type | Result |
 |---|---|
-| `image/png`, `image/jpeg`, `image/gif`, `image/svg+xml` | 201 |
+| `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml` | 201 |
 | `video/mp4`, `video/webm`, `video/quicktime` | 201 |
-| `audio/mpeg`, `application/pdf`, `application/zip` | 422 not in allowed list |
+| `image/avif`, `image/apng`, `video/x-m4v`, `audio/mpeg`, `audio/wav` | 422 not in allowed list |
+| `application/pdf`, `application/zip`, `application/octet-stream` | 422 not in allowed list |
 | `text/plain`, `text/markdown`, `text/csv`, `application/json` | 422 not in allowed list |
 | `image/jpeg` with a `.png` filename | 422 extension mismatch |
 
-So the token path covers **images and video only**. The browser drag-and-drop path still
-accepts PDFs, Office files, logs, and archives; those need a browser or a different host.
+So the token path covers **images and video only**. Everything else is section 1b.
 
 Size ceilings are GitHub's documented attachment limits: 10 MB for images and GIFs, 10 MB
 for video on a free plan and 100 MB on a paid plan, 25 MB for everything else.
+
+## 1b. Non-media attachments need a browser session
+
+PDFs, archives, logs, and text files land in a **different store** with a different URL
+shape — `https://github.com/user-attachments/files/<id>/<name>` rather than
+`/assets/<uuid>` — and there is no token route to it.
+
+`scripts/browser-attach.js` runs in the page context of an open issue or PR and hands the
+file to GitHub's own editor as a synthesized `paste` with a real `File`:
+
+```js
+await attachFiles([{ name: "evidence.log", type: "", base64: "..." }])
+// -> ["[evidence.log](https://github.com/user-attachments/files/31204124/evidence.log)"]
+```
+
+Verified this way: `application/pdf`, `application/zip`, and `text/plain`.
+
+Two things that will bite:
+
+- **The declared type must be what a real browser would report for that filename.** A
+  `.log` declared as `text/plain` is rejected; the identical bytes with an **empty** type
+  succeed, because that is what Chrome reports for an extension the OS mime map does not
+  know. The policy step validates name against content type just like the token endpoint.
+- **GitHub's new comment box has no `input[type=file]` in the DOM** — it is created on
+  demand — so ref-based file-input upload tools find nothing to target. The paste event is
+  the reliable seam.
+
+### Why a token cannot do this
+
+Instrumenting `fetch` during a real upload shows a three-step flow:
+
+1. `POST github.com/upload/policies/assets` — multipart `repository_id`, `name`, `size`,
+   `content_type`; headers include `github-verified-fetch: true` and a per-page-load
+   `x-fetch-nonce`, returning the S3 policy and a numeric id
+2. `POST objects-origin.githubusercontent.com/github-production-repository-file-…` — the
+   policy fields from step 1, plus `file`
+3. `PUT /upload/repository-files/<id>` — `authenticity_token`
+
+Step 1's verified-fetch nonce is issued to a page load, which is the whole point: it is
+there to stop exactly this kind of scripted call. `uploads.github.com/user-attachments/files`
+does exist and does validate `size`, but returned 404 for every content type tried, with
+and without those headers spoofed.
+
+Practical consequence: if a non-media attachment has to be produced unattended, do not
+chase this flow. Put the file in a release asset (`gh release upload`, any file type, 2 GB
+each) or a repo blob and link to it — it will not preview, but it needs no session.
 
 ### How each URL shape renders
 
@@ -80,10 +128,12 @@ Images have fallbacks that need no undocumented endpoint: a release asset
 
 ### Two more properties to design around
 
-- **Attachments are public by URL.** Fetching a canonical asset URL unauthenticated
+- **Attachments are public by URL.** Fetching a canonical `/assets/` URL unauthenticated
   returns `302` to a signed S3 object and then `200` with the bytes, even though the
   rendered page uses short-lived `private-user-images.githubusercontent.com` links. Treat
-  an uploaded attachment as published.
+  an uploaded attachment as published. `/files/` URLs behave slightly differently: they
+  404 while still an unposted draft, and become publicly downloadable once referenced from
+  posted content.
 - **`repository_id` is attribution, not a fence.** An asset uploaded against repo A
   renders in repo B's markdown context. Upload once, embed anywhere you can write.
 
@@ -166,7 +216,7 @@ same events GitHub's comment box listens for.
 |---|---|
 | Image or video into an issue/PR/README, scripted | `scripts/upload-attachment.mjs` |
 | Same from CI | unverified — see the note below |
-| PDF, zip, log, or other non-media attachment | a browser file-input upload, or a release asset plus a link |
+| PDF, zip, log, or other non-media attachment | `scripts/browser-attach.js` in a logged-in page, or a release asset plus a link |
 | Product walkthrough video | `scripts/record-demo.mjs` |
 | Generated/mathematical motion | `scripts/render-math-video.mjs` |
 | Proof of what a desktop automation did | `peekaboo capture live` |
@@ -200,7 +250,9 @@ windows, a real pointer, and real app state, none of which a runner has.
 ## Layout
 
 ```
-scripts/upload-attachment.mjs   token-auth attachment upload, prints the asset URL
+scripts/upload-attachment.mjs   token-auth media upload, prints the asset URL
+scripts/browser-attach.js       non-media upload, runs in a logged-in page context
+scripts/record-window.sh        window-scoped macOS screen recording
 scripts/record-demo.mjs         headless walkthrough recorder (cursor, clicks, captions)
 scripts/demo-overlay.mjs        injected pointer / ripple / caption / title-card layer
 scripts/render-math-video.mjs   deterministic canvas -> frame-accurate MP4
