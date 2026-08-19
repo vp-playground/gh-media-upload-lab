@@ -1,0 +1,84 @@
+name: demo-video
+
+# Records the demo headlessly on a runner, uploads the MP4 as a GitHub
+# attachment, and posts it to the pull request. The point of this workflow is to
+# answer one question: does the undocumented attachment endpoint accept the
+# built-in GITHUB_TOKEN, or does it require a user token?
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - name: Report toolchain
+        run: |
+          ffmpeg -hide_banner -version | head -2
+          ffmpeg -hide_banner -filters | grep -E ' (drawtext|subtitles|ass) ' || echo "no text/subtitle filters"
+
+      - name: Render math video
+        run: node scripts/render-math-video.mjs out/ci-math.mp4
+
+      - name: Record app demo
+        run: node scripts/record-demo.mjs
+
+      - name: Upload attachments with GITHUB_TOKEN
+        id: upload
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          for f in out/ci-math.mp4 out/demo.mp4; do
+            echo "::group::$f"
+            if url=$(node scripts/upload-attachment.mjs "$GITHUB_REPOSITORY" "$f"); then
+              echo "OK $f -> $url"
+              echo "$(basename "$f")=$url" >> "$GITHUB_OUTPUT"
+            else
+              echo "FAILED for $f — GITHUB_TOKEN appears not to be accepted"
+              echo "$(basename "$f")=FAILED" >> "$GITHUB_OUTPUT"
+            fi
+            echo "::endgroup::"
+          done
+
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MATH: ${{ steps.upload.outputs['ci-math.mp4'] }}
+          DEMO: ${{ steps.upload.outputs['demo.mp4'] }}
+        run: |
+          {
+            echo "### Rendered on the runner — commit \`${GITHUB_SHA::7}\`"
+            echo
+            echo "Both videos were produced headlessly on \`ubuntu-latest\` and uploaded with the"
+            echo "workflow's built-in \`GITHUB_TOKEN\`. No browser session, no clipboard, no desktop."
+            echo
+            echo "**Deterministic canvas render**"
+            echo
+            echo "$MATH"
+            echo
+            echo "**Scripted app walkthrough**"
+            echo
+            echo "$DEMO"
+          } > comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.md
