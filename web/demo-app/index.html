@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<title>Pulse — Support Inbox</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="app.css" />
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <span class="brand-name">Pulse</span>
+      </div>
+      <nav>
+        <a class="nav-item is-active" data-view="inbox"><span class="ico">◐</span>Inbox<span class="badge">7</span></a>
+        <a class="nav-item" data-view="assigned"><span class="ico">◔</span>Assigned to me<span class="badge">2</span></a>
+        <a class="nav-item" data-view="sla"><span class="ico">◒</span>SLA risk<span class="badge badge-warn">3</span></a>
+        <a class="nav-item" data-view="closed"><span class="ico">◕</span>Resolved</a>
+      </nav>
+      <div class="side-foot">
+        <div class="avatar">VP</div>
+        <div class="side-foot-txt"><b>ViPro</b><span>Support lead</span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <label class="search">
+          <span class="search-ico">⌕</span>
+          <input id="search" placeholder="Search conversations, customers, tags…" autocomplete="off" />
+          <kbd>⌘K</kbd>
+        </label>
+        <div class="topbar-right">
+          <button class="btn btn-ghost">Filters</button>
+          <button class="btn btn-primary" id="btn-assign">Assign</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="list" id="list"></div>
+        <div class="detail" id="detail">
+          <div class="detail-empty">Select a conversation</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-scrim" id="scrim">
+    <div class="modal" role="dialog" aria-label="Assign conversation">
+      <h3>Assign conversation</h3>
+      <p class="modal-sub">Route this ticket to a teammate. They get notified immediately.</p>
+      <div class="assignees" id="assignees">
+        <button class="assignee" data-name="Ada Chen"><span class="avatar avatar-sm">AC</span>Ada Chen<small>2 open</small></button>
+        <button class="assignee" data-name="Ben Kuo"><span class="avatar avatar-sm">BK</span>Ben Kuo<small>5 open</small></button>
+        <button class="assignee" data-name="Mei Lin"><span class="avatar avatar-sm">ML</span>Mei Lin<small>1 open</small></button>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="modal-confirm" disabled>Confirm assignment</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

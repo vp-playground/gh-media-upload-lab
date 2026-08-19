@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Paste probe</title>
+<style>
+  body { font: 15px/1.6 -apple-system, sans-serif; background: #0d1117; color: #e6edf3; padding: 28px; }
+  textarea { width: 100%; height: 130px; background: #161b22; color: #e6edf3; border: 1px solid #30363d;
+             border-radius: 8px; padding: 12px; font: 14px ui-monospace, monospace; }
+  #log { margin-top: 16px; white-space: pre-wrap; font: 13px ui-monospace, monospace; color: #7ee787; }
+  h1 { font-size: 17px; }
+</style>
+<h1>Paste probe — reports what a Cmd+V actually delivered</h1>
+<textarea id="ta" placeholder="focus me, then paste"></textarea>
+<div id="log">waiting…</div>
+<script>
+  // Mirrors what GitHub's comment box listens for: a paste event carrying
+  // clipboardData.files. If a background Cmd+V lands here with a File, the same
+  // technique works on a real GitHub textarea.
+  window.__pasted = [];
+  const log = document.getElementById("log");
+  const ta = document.getElementById("ta");
+  ta.addEventListener("paste", (e) => {
+    const cd = e.clipboardData;
+    const entry = {
+      at: new Date().toISOString(),
+      types: Array.from(cd.types),
+      files: Array.from(cd.files).map((f) => ({ name: f.name, type: f.type, size: f.size })),
+      items: Array.from(cd.items).map((i) => ({ kind: i.kind, type: i.type })),
+      text: (cd.getData("text/plain") || "").slice(0, 120),
+    };
+    window.__pasted.push(entry);
+    log.textContent = JSON.stringify(window.__pasted, null, 2);
+  });
+  ta.addEventListener("focus", () => { log.textContent = "textarea focused, waiting for paste…"; });
+</script>

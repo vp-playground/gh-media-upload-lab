@@ -1,0 +1,156 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Fourier Epicycles</title>
+<style>
+  html, body { margin: 0; background: #05070d; overflow: hidden; }
+  canvas { display: block; }
+</style>
+<canvas id="c" width="1280" height="720"></canvas>
+<script>
+  // Deterministic math animation.
+  // The page never uses requestAnimationFrame or Date: the renderer is a pure
+  // function of a caller-supplied time, so an external frame grabber can step
+  // through it and produce a frame-accurate video.
+  const DURATION = 12; // seconds of animation loop
+  const cvs = document.getElementById("c");
+  const ctx = cvs.getContext("2d", { alpha: false });
+  const W = cvs.width, H = cvs.height;
+
+  // ---- source shape: a parametric "heart-in-a-gear" outline, sampled densely
+  function shape(u) {
+    const a = u * Math.PI * 2;
+    const r = 180 + 26 * Math.cos(7 * a) + 10 * Math.sin(3 * a);
+    return {
+      x: r * Math.sin(a) * (1 + 0.18 * Math.sin(2 * a)),
+      y: -r * Math.cos(a) * (1 - 0.12 * Math.cos(4 * a)),
+    };
+  }
+  const N = 512;
+  const pts = Array.from({ length: N }, (_, i) => shape(i / N));
+
+  // ---- discrete Fourier transform of the complex sequence x + iy
+  function dft(points) {
+    const out = [];
+    for (let k = 0; k < points.length; k++) {
+      let re = 0, im = 0;
+      for (let n = 0; n < points.length; n++) {
+        const phi = (2 * Math.PI * k * n) / points.length;
+        re += points[n].x * Math.cos(phi) + points[n].y * Math.sin(phi);
+        im += points[n].y * Math.cos(phi) - points[n].x * Math.sin(phi);
+      }
+      re /= points.length; im /= points.length;
+      out.push({ freq: k, amp: Math.hypot(re, im), phase: Math.atan2(im, re) });
+    }
+    // Largest circles first so the drawing converges quickly.
+    return out.sort((p, q) => q.amp - p.amp);
+  }
+  const FOURIER = dft(pts);
+  const HARMONICS = 96;
+
+  const trail = [];
+
+  function epicycles(t) {
+    // t in [0, 1): one full revolution traces the whole outline.
+    let x = 0, y = 0;
+    const circles = [];
+    for (let i = 0; i < HARMONICS; i++) {
+      const { freq, amp, phase } = FOURIER[i];
+      const px = x, py = y;
+      const ang = freq * 2 * Math.PI * t + phase;
+      x += amp * Math.cos(ang);
+      y += amp * Math.sin(ang);
+      circles.push({ px, py, x, y, amp });
+    }
+    return { x, y, circles };
+  }
+
+  function background(t) {
+    ctx.fillStyle = "#05070d";
+    ctx.fillRect(0, 0, W, H);
+    // Slowly rotating polar grid: cheap depth without hiding the curve.
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.rotate(t * 0.35);
+    ctx.strokeStyle = "rgba(88,166,255,0.09)";
+    ctx.lineWidth = 1;
+    for (let r = 60; r < 700; r += 60) {
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+    }
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      ctx.beginPath(); ctx.moveTo(0, 0);
+      ctx.lineTo(700 * Math.cos(a), 700 * Math.sin(a)); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function overlay(t, progress) {
+    ctx.save();
+    ctx.font = "600 26px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.fillStyle = "#e6edf3";
+    ctx.fillText("Fourier epicycles", 44, 60);
+    ctx.font = "400 16px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.fillStyle = "#7d8590";
+    ctx.fillText(`${HARMONICS} harmonics · z(t) = Σ Aₖ·e^(i(2πkt+φₖ))`, 44, 90);
+    ctx.fillText(`t = ${t.toFixed(3)} s`, 44, 116);
+    // progress bar
+    ctx.fillStyle = "rgba(125,133,144,0.25)";
+    ctx.fillRect(44, H - 52, W - 88, 4);
+    ctx.fillStyle = "#3fb950";
+    ctx.fillRect(44, H - 52, (W - 88) * progress, 4);
+    ctx.restore();
+  }
+
+  // Pure render: same input time always produces the same pixels.
+  window.renderFrame = function (time) {
+    const u = Math.min(1, time / DURATION); // one full revolution per loop
+
+    background(time);
+
+    // Rebuild the trail from scratch each frame so the output stays a pure
+    // function of `time` (no dependence on previous calls / frame order).
+    const RES = N * 2;                      // trail sample resolution
+    trail.length = 0;
+    const samples = Math.max(2, Math.round(u * RES));
+    for (let s = 0; s <= samples; s++) trail.push(epicycles(s / RES));
+    const cur = epicycles(u);
+
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+
+    // epicycle circles + radii
+    ctx.lineWidth = 1;
+    for (const c of cur.circles.slice(0, 28)) {
+      if (c.amp < 2) continue;
+      ctx.strokeStyle = "rgba(230,237,243,0.22)";
+      ctx.beginPath(); ctx.arc(c.px, c.py, c.amp, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = "rgba(230,237,243,0.5)";
+      ctx.beginPath(); ctx.moveTo(c.px, c.py); ctx.lineTo(c.x, c.y); ctx.stroke();
+    }
+
+    // traced curve with a hue sweep
+    ctx.lineWidth = 3;
+    ctx.lineJoin = "round";
+    for (let i = 1; i < trail.length; i++) {
+      const h = 200 + 120 * (i / Math.max(1, trail.length));
+      ctx.strokeStyle = `hsl(${h} 90% 62%)`;
+      ctx.beginPath();
+      ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+      ctx.lineTo(trail[i].x, trail[i].y);
+      ctx.stroke();
+    }
+
+    // pen
+    ctx.fillStyle = "#f0f6fc";
+    ctx.beginPath(); ctx.arc(cur.x, cur.y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowColor = "#58a6ff"; ctx.shadowBlur = 18;
+    ctx.beginPath(); ctx.arc(cur.x, cur.y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    overlay(time, u);
+    return true;
+  };
+  window.ANIM_DURATION = DURATION;
+  window.renderFrame(0);
+</script>
