@@ -4,8 +4,11 @@ name: demo-video
 # attachment, and posts it to the pull request. The point of this workflow is to
 # answer one question: does the undocumented attachment endpoint accept the
 # built-in GITHUB_TOKEN, or does it require a user token?
+# Manual only. Whether the attachment endpoint accepts a workflow's built-in
+# GITHUB_TOKEN is still unverified: the runs kept getting swamped by setup cost
+# (playwright --with-deps alone took 9m22s) and the question was parked. Run this
+# by hand if the unattended path ever matters.
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:

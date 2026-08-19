@@ -165,11 +165,32 @@ same events GitHub's comment box listens for.
 | Goal | Use |
 |---|---|
 | Image or video into an issue/PR/README, scripted | `scripts/upload-attachment.mjs` |
-| Same from CI | the same script with the workflow's token — see `.github/workflows/demo-video.yml` |
+| Same from CI | unverified — see the note below |
 | PDF, zip, log, or other non-media attachment | a browser file-input upload, or a release asset plus a link |
 | Product walkthrough video | `scripts/record-demo.mjs` |
 | Generated/mathematical motion | `scripts/render-math-video.mjs` |
 | Proof of what a desktop automation did | `peekaboo capture live` |
+
+## Open question: unattended runs
+
+Everything above was verified with a user token from `gh auth token`. Whether the
+attachment endpoint also accepts a workflow's built-in `GITHUB_TOKEN` was **not**
+established. `.github/workflows/demo-video.yml` is the harness for it, left on
+`workflow_dispatch` so it never runs by itself.
+
+Two things learned while trying, worth keeping:
+
+- Do not run `apt-get` after `playwright install --with-deps` in the same job. The
+  Playwright step holds the dpkg lock for minutes and the second apt stalled past
+  seven. Fetch a static ffmpeg build instead.
+- Frame-by-frame rendering is an order of magnitude slower on a 2-core runner than
+  on an M-series laptop — 720 frames at `-preset slow` ran past 20 minutes versus
+  ~31 s locally. Both scripts take `FPS`, `MAX_SECONDS`, and `X264_PRESET` so the
+  cost can be dialled down.
+
+Also note the split by surface: only the browser paths (2 and 3) transfer to CI at
+all. Desktop capture and desktop automation need a real macOS session with real
+windows, a real pointer, and real app state, none of which a runner has.
 
 ## Layout
 
