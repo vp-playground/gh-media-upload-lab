@@ -32,11 +32,19 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
 
       - name: Install ffmpeg
-        # ubuntu-latest runner images no longer ship ffmpeg, and Playwright's
-        # bundled copy is VP8-only, so h264/MP4 output needs the real package.
+        # ubuntu-latest no longer ships ffmpeg and Playwright's bundled copy is
+        # VP8-only, so h264/MP4 output needs a real build. Deliberately NOT apt:
+        # the playwright --with-deps step above already holds the dpkg lock for
+        # minutes, and a second apt run behind it stalled past 7 minutes. A
+        # static tarball is one download with no lock to contend for, and this
+        # gpl build also carries libass/freetype, so drawtext and subtitle
+        # burn-in work here even though the local Homebrew build lacks them.
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
+          curl -fsSL -o /tmp/ffmpeg.tar.xz \
+            https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+          mkdir -p /tmp/ffmpeg
+          tar -xJf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg --strip-components=1
+          echo "/tmp/ffmpeg/bin" >> "$GITHUB_PATH"
 
       - name: Report toolchain
         run: |
