@@ -31,6 +31,13 @@ jobs:
       - run: pnpm install --frozen-lockfile=false
       - run: pnpm exec playwright install --with-deps chromium
 
+      - name: Install ffmpeg
+        # ubuntu-latest runner images no longer ship ffmpeg, and Playwright's
+        # bundled copy is VP8-only, so h264/MP4 output needs the real package.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
       - name: Report toolchain
         run: |
           ffmpeg -hide_banner -version | head -2

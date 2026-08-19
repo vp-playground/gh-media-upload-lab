@@ -13,6 +13,8 @@ import { mkdirSync, rmSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { chromium } from "playwright";
+
+const FFMPEG = process.env.FFMPEG ?? "ffmpeg";
 import { OVERLAY_INIT } from "./demo-overlay.mjs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -168,7 +170,7 @@ writeFileSync(path.join(OUT, "demo.vtt"), vtt.join("\n"));
 
 const mp4 = path.join(OUT, "demo.mp4");
 await new Promise((resolve, reject) => {
-  const ff = spawn("ffmpeg", [
+  const ff = spawn(FFMPEG, [
     "-y", "-loglevel", "error", "-ss", String(LEAD_TRIM), "-i", webm,
     "-vf", `fps=${FPS},scale=${SIZE.width}:${SIZE.height}:flags=lanczos,format=yuv420p`,
     "-c:v", "libx264", "-preset", "slow", "-crf", "22",

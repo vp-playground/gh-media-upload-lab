@@ -11,6 +11,8 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { chromium } from "playwright";
 
+const FFMPEG = process.env.FFMPEG ?? "ffmpeg";
+
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FPS = Number(process.env.FPS ?? 60);
 const WIDTH = 1280;
@@ -28,7 +30,7 @@ const total = Math.round(duration * FPS);
 console.log(`rendering ${total} frames @ ${FPS}fps (${duration}s) -> ${outPath}`);
 
 const ff = spawn(
-  "ffmpeg",
+  FFMPEG,
   [
     "-y", "-loglevel", "error",
     "-f", "image2pipe", "-framerate", String(FPS), "-i", "-",
