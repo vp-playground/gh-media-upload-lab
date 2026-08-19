@@ -1,2 +1,184 @@
+# gh-media-upload-lab
 
-CI media pipeline check.
+Two questions, answered with running code instead of blog posts:
+
+1. How do you get an **image or a video into a GitHub issue or PR from a script**, with no
+   browser, no clipboard, and no stolen window focus?
+2. How do you produce a **web-demo video that looks like real usage** — moving cursor,
+   click feedback, subtitles — headlessly?
+
+Everything below was verified against this repository on 2026-08-19. Evidence lives in
+[issue #1](https://github.com/vp-playground/gh-media-upload-lab/issues/1) and
+[PR #2](https://github.com/vp-playground/gh-media-upload-lab/pull/2).
+
+## 1. Uploading media to issues and pull requests
+
+GitHub's REST API still has no documented attachment endpoint, but the endpoint the web
+UI's drag-and-drop is built on accepts an ordinary API bearer token:
+
+```bash
+node scripts/upload-attachment.mjs vp-playground/gh-media-upload-lab out/demo.mp4
+# -> https://github.com/user-attachments/assets/<uuid>
+```
+
+```
+POST https://uploads.github.com/user-attachments/assets
+  ?name=<filename>&content_type=<mime>&repository_id=<numeric id>
+Authorization: Bearer <token>
+Accept: application/json
+<raw bytes as the body>
+-> 201 {"url":"https://github.com/user-attachments/assets/<uuid>"}
+```
+
+That URL is the same one drag-and-drop produces, so every GitHub surface renders it
+natively. Undocumented means unversioned: pin nothing to it that cannot fall back.
+
+### What the endpoint accepts
+
+Verified by probing content types directly. The endpoint validates the MIME type **and**
+that the filename extension matches it.
+
+| Content type | Result |
+|---|---|
+| `image/png`, `image/jpeg`, `image/gif`, `image/svg+xml` | 201 |
+| `video/mp4`, `video/webm`, `video/quicktime` | 201 |
+| `audio/mpeg`, `application/pdf`, `application/zip` | 422 not in allowed list |
+| `text/plain`, `text/markdown`, `text/csv`, `application/json` | 422 not in allowed list |
+| `image/jpeg` with a `.png` filename | 422 extension mismatch |
+
+So the token path covers **images and video only**. The browser drag-and-drop path still
+accepts PDFs, Office files, logs, and archives; those need a browser or a different host.
+
+Size ceilings are GitHub's documented attachment limits: 10 MB for images and GIFs, 10 MB
+for video on a free plan and 100 MB on a paid plan, 25 MB for everything else.
+
+### How each URL shape renders
+
+Checked through the rendered HTML of a real issue, a real comment, `POST /markdown`, and a
+real `README.md`.
+
+| Asset location | Markdown used | Renders as |
+|---|---|---|
+| `user-attachments` | `![alt](url)` | `<img>` |
+| `user-attachments` | bare URL on its own line | native `<video>` player |
+| `user-attachments` | `<video src="url" controls>` | native `<video>` player |
+| `user-attachments` | `[label](url)` | native `<video>` player |
+| Release asset / `raw.githubusercontent.com` | `![alt](url)` | `<img>` |
+| Release asset / `raw.githubusercontent.com` | bare URL | plain link, no player |
+| Release asset / `raw.githubusercontent.com` | `<video src="url">` | **tag stripped entirely** |
+
+Two consequences worth remembering:
+
+- **Inline video playback has exactly one source.** `<video>` survives the sanitizer only
+  when `src` points at a `user-attachments` asset. Committing an MP4 to the repo and
+  linking it does not produce a player, in issues or in a README.
+- `<video>` **is** allowed in `README.md`, not just in issues. The widely repeated claim
+  that GitHub strips video from READMEs is out of date for attachment URLs.
+
+Images have fallbacks that need no undocumented endpoint: a release asset
+(`gh release upload`) or a `raw.githubusercontent.com` URL both render as `<img>`.
+
+### Two more properties to design around
+
+- **Attachments are public by URL.** Fetching a canonical asset URL unauthenticated
+  returns `302` to a signed S3 object and then `200` with the bytes, even though the
+  rendered page uses short-lived `private-user-images.githubusercontent.com` links. Treat
+  an uploaded attachment as published.
+- **`repository_id` is attribution, not a fence.** An asset uploaded against repo A
+  renders in repo B's markdown context. Upload once, embed anywhere you can write.
+
+### Animated GIF, for comparison
+
+Same 35-second walkthrough, 12 fps and 900 px wide as a GIF versus 30 fps and 1280 px wide
+as H.264: **4.65 MB vs 948 KB**. Use MP4 unless you specifically need a frame that
+autoplays with no click, or a surface outside GitHub that has no player.
+
+## 2. Recording a demo video headlessly
+
+`scripts/record-demo.mjs` drives [`web/demo-app/`](web/demo-app) — a fake support-inbox
+product — and records the whole session in headless Chromium. The macOS desktop is never
+touched: no window focus, no real pointer movement, no clipboard.
+
+```bash
+pnpm demo    # -> out/demo.mp4 + out/demo.vtt
+pnpm math    # -> out/math.mp4
+```
+
+The parts that make it read as real usage rather than a slideshow:
+
+- **The pointer is a follower, not an animation.** The driver moves the actual Playwright
+  mouse; an injected SVG pointer positions itself from real `mousemove` events. Hover
+  states, `:active`, and handlers fire exactly as they would for a person, and the drawn
+  pointer cannot drift from where the click really lands.
+- **Eased, slightly bowed motion.** `easeInOutCubic` over ~60 samples per move, plus a
+  small perpendicular bow, so paths are not machine-straight.
+- **A beat before every click**, a scale-down on mousedown, and a ripple at the contact
+  point.
+- **Real typing** via `keyboard.type` with per-character delay, so filtering visibly
+  narrows as characters land.
+- **Subtitles rendered in the DOM**, which also gives full CSS control, and the same run
+  writes `out/demo.vtt` with the real cue timings.
+- Playwright records WebM; ffmpeg converts to `yuv420p` H.264 with `+faststart` and trims
+  the blank pre-paint lead-in.
+
+`scripts/render-math-video.mjs` is the deterministic variant for pure generated motion:
+[`web/math.html`](web/math.html) exposes a pure `window.renderFrame(t)` — no
+`requestAnimationFrame`, no `Date` — so the renderer steps an exact timeline and pipes PNGs
+straight into ffmpeg. 720 frames of Fourier epicycles at a true 60 fps in ~31 s, and the
+same input always produces identical pixels.
+
+Note for CI: `ubuntu-latest` no longer ships ffmpeg, and Playwright's bundled copy is
+VP8-only, so h264 output needs `apt-get install ffmpeg`. Both scripts honour `$FFMPEG`.
+
+## 3. Where the local-desktop route stops
+
+Peekaboo 4 is background-first and its limits are explicit rather than accidental.
+
+- **Background text input works.** `peekaboo paste "…" --app TextEdit` inserted text into a
+  window that was never focused, via the accessibility path.
+- **Background binary paste does not.** `peekaboo paste --file-path shot.png --app TextEdit`
+  returned `effect: unverifiable` with "Cmd+V may have pasted; do not retry", and a
+  background window capture confirmed nothing arrived. Image and video payloads need
+  `--foreground`, which takes focus. This is the reason to prefer the upload endpoint.
+- **Background keystrokes cannot target one window.** Adding `--window-title` is refused
+  outright: "Background keyboard delivery cannot safely target a specific window." The
+  event goes to the app's key window or nowhere.
+- **`capture live --video-out` really does write H.264 MP4** of a screen, window, or
+  region, in background focus mode, at native 2× scale. It is change-aware sampling
+  though: a static 320×240 region for 4 s kept 1 frame and dropped 11. Capped at 180 s and
+  15 active fps, with no way to force every frame. Good automation evidence, wrong tool for
+  a smooth demo.
+- **`capture video`** turns any video into sampled frames plus a contact sheet, which is
+  the fastest way for an agent to review a long recording.
+- **`browser` needs a human first.** The Chrome DevTools bridge requires the user to enable
+  remote debugging at `chrome://inspect/#remote-debugging` and accept a prompt, so it
+  cannot be brought up unattended.
+- Through MCP, only **one desktop-mutating call per model response** is honoured; further
+  mutations are skipped until a fresh `see`.
+
+`web/paste-probe.html` is a standalone page that reports exactly what a `Cmd+V` delivered
+(`clipboardData.types`, `.files`, `.items`), which is how to test a paste path against the
+same events GitHub's comment box listens for.
+
+## Recommended paths
+
+| Goal | Use |
+|---|---|
+| Image or video into an issue/PR/README, scripted | `scripts/upload-attachment.mjs` |
+| Same from CI | the same script with the workflow's token — see `.github/workflows/demo-video.yml` |
+| PDF, zip, log, or other non-media attachment | a browser file-input upload, or a release asset plus a link |
+| Product walkthrough video | `scripts/record-demo.mjs` |
+| Generated/mathematical motion | `scripts/render-math-video.mjs` |
+| Proof of what a desktop automation did | `peekaboo capture live` |
+
+## Layout
+
+```
+scripts/upload-attachment.mjs   token-auth attachment upload, prints the asset URL
+scripts/record-demo.mjs         headless walkthrough recorder (cursor, clicks, captions)
+scripts/demo-overlay.mjs        injected pointer / ripple / caption / title-card layer
+scripts/render-math-video.mjs   deterministic canvas -> frame-accurate MP4
+web/demo-app/                   fake support-inbox product used as the demo subject
+web/math.html                   pure renderFrame(t) Fourier-epicycle animation
+web/paste-probe.html            reports what a Cmd+V actually delivered
+```

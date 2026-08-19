@@ -40,6 +40,7 @@ const page = await context.newPage();
 // measured from here and the blank pre-paint lead-in is trimmed at encode time.
 const videoT0 = Date.now();
 const LEAD_TRIM = 0.5;
+await page.addInitScript("window.__DEMO_CHROME = true;");
 await page.addInitScript(OVERLAY_INIT);
 await page.goto(`file://${path.join(root, "web", "demo-app", "index.html")}`);
 await page.waitForSelector("#__demo_layer");
@@ -173,7 +174,7 @@ await new Promise((resolve, reject) => {
   const ff = spawn(FFMPEG, [
     "-y", "-loglevel", "error", "-ss", String(LEAD_TRIM), "-i", webm,
     "-vf", `fps=${FPS},scale=${SIZE.width}:${SIZE.height}:flags=lanczos,format=yuv420p`,
-    "-c:v", "libx264", "-preset", "slow", "-crf", "22",
+    "-c:v", "libx264", "-preset", X264_PRESET, "-crf", "22",
     "-movflags", "+faststart", mp4,
   ], { stdio: "inherit" });
   ff.on("close", (c) => (c === 0 ? resolve() : reject(new Error(`ffmpeg ${c}`))));

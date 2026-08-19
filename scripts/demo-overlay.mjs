@@ -42,8 +42,44 @@ export const OVERLAY_INIT = `
       #__demo_card p { margin: 0; font: 400 20px/1.5 -apple-system, "SF Pro Text", "Noto Sans TC", sans-serif; color: #8b949e; }
       #__demo_card .rule { width: 64px; height: 3px; border-radius: 2px;
         background: linear-gradient(90deg,#58a6ff,#a371f7); }
+
+      /* Fake desktop + browser window, so the recording reads as a screen
+         capture of a real browser rather than a bare viewport. */
+      body.__demo_shelled { overflow: hidden;
+        background: radial-gradient(1200px 700px at 20% -10%, #1b2436 0%, #070a10 55%, #04060a 100%) !important; }
+      #__demo_shell { position: fixed; inset: 26px; display: flex; flex-direction: column;
+        border-radius: 12px; overflow: hidden; background: #0d1117;
+        box-shadow: 0 30px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.07); }
+      #__demo_chrome { flex: 0 0 40px; display: flex; align-items: center; gap: 10px;
+        padding: 0 14px; background: #21262d; border-bottom: 1px solid rgba(255,255,255,.07); }
+      #__demo_chrome .lights { display: flex; gap: 7px; }
+      #__demo_chrome .lights i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      #__demo_url { flex: 1; margin: 0 8px; height: 24px; border-radius: 999px;
+        background: #0d1117; border: 1px solid rgba(255,255,255,.08); display: flex;
+        align-items: center; gap: 7px; padding: 0 12px; color: #8b949e;
+        font: 12px/1 -apple-system, "SF Pro Text", sans-serif; }
+      #__demo_url b { color: #e6edf3; font-weight: 500; }
+      #__demo_content { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+      #__demo_content > * { height: 100% !important; }
     \`;
     document.head.appendChild(css);
+
+    if (window.__DEMO_CHROME) {
+      const shell = document.createElement("div");
+      shell.id = "__demo_shell";
+      const bar = document.createElement("div");
+      bar.id = "__demo_chrome";
+      bar.innerHTML =
+        '<span class="lights"><i style="background:#ff5f57"></i>' +
+        '<i style="background:#febc2e"></i><i style="background:#28c840"></i></span>' +
+        '<div id="__demo_url">\u{1F512} <b>app.pulse.support</b>/inbox</div>';
+      const content = document.createElement("div");
+      content.id = "__demo_content";
+      while (document.body.firstChild) content.appendChild(document.body.firstChild);
+      shell.append(bar, content);
+      document.body.appendChild(shell);
+      document.body.classList.add("__demo_shelled");
+    }
 
     const layer = document.createElement("div");
     layer.id = "__demo_layer";

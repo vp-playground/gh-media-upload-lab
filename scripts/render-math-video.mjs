@@ -15,6 +15,11 @@ const FFMPEG = process.env.FFMPEG ?? "ffmpeg";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FPS = Number(process.env.FPS ?? 60);
+// Frame-by-frame rendering is CPU-bound: a 2-core CI runner is an order of
+// magnitude slower than a laptop, so both the frame count and the encoder
+// preset need to be tunable per environment.
+const MAX_SECONDS = Number(process.env.MAX_SECONDS ?? 0);
+const X264_PRESET = process.env.X264_PRESET ?? "slow";
 const WIDTH = 1280;
 const HEIGHT = 720;
 const outPath = process.argv[2] ?? path.join(root, "out", "math.mp4");
@@ -26,7 +31,7 @@ const page = await browser.newPage({
 });
 await page.goto(`file://${path.join(root, "web", "math.html")}`);
 const duration = await page.evaluate(() => window.ANIM_DURATION);
-const total = Math.round(duration * FPS);
+const total = Math.round((MAX_SECONDS > 0 ? Math.min(duration, MAX_SECONDS) : duration) * FPS);
 console.log(`rendering ${total} frames @ ${FPS}fps (${duration}s) -> ${outPath}`);
 
 const ff = spawn(
@@ -34,7 +39,7 @@ const ff = spawn(
   [
     "-y", "-loglevel", "error",
     "-f", "image2pipe", "-framerate", String(FPS), "-i", "-",
-    "-c:v", "libx264", "-preset", "slow", "-crf", "20",
+    "-c:v", "libx264", "-preset", X264_PRESET, "-crf", "20",
     "-pix_fmt", "yuv420p", "-movflags", "+faststart",
     outPath,
   ],

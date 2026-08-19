@@ -44,9 +44,18 @@ jobs:
           ffmpeg -hide_banner -filters | grep -E ' (drawtext|subtitles|ass) ' || echo "no text/subtitle filters"
 
       - name: Render math video
+        # Deliberately short and cheap here. The point of this job is the upload
+        # path, not a full-length render: 720 frames at preset slow ran past 20
+        # minutes on a runner versus ~31 s on an M-series laptop.
+        env:
+          FPS: "24"
+          MAX_SECONDS: "4"
+          X264_PRESET: "veryfast"
         run: node scripts/render-math-video.mjs out/ci-math.mp4
 
       - name: Record app demo
+        env:
+          X264_PRESET: "veryfast"
         run: node scripts/record-demo.mjs
 
       - name: Upload attachments with GITHUB_TOKEN
