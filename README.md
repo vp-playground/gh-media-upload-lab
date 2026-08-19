@@ -183,6 +183,11 @@ Two things learned while trying, worth keeping:
 - Do not run `apt-get` after `playwright install --with-deps` in the same job. The
   Playwright step holds the dpkg lock for minutes and the second apt stalled past
   seven. Fetch a static ffmpeg build instead.
+- That static build reports `drawtext`, `ass`, and `subtitles` filters, confirmed
+  from the runner log. The local Homebrew ffmpeg here has none of them — only
+  `drawbox` — which is why captions are rendered in the DOM rather than burned in.
+  With a freetype/libass build, `out/demo.vtt` could instead be burned in after the
+  fact via `-vf subtitles=demo.vtt`, restyling without re-recording.
 - Frame-by-frame rendering is an order of magnitude slower on a 2-core runner than
   on an M-series laptop — 720 frames at `-preset slow` ran past 20 minutes versus
   ~31 s locally. Both scripts take `FPS`, `MAX_SECONDS`, and `X264_PRESET` so the
